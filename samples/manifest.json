@@ -1,0 +1,27 @@
+{
+  "source": "polyhaven",
+  "resolution": "1k",
+  "assets": [
+    { "id": "barrel_03", "category": "hard-surface" },
+    { "id": "metal_office_desk", "category": "hard-surface" },
+    { "id": "old_military_crate", "category": "hard-surface" },
+    { "id": "plastic_jerrycan", "category": "hard-surface" },
+    { "id": "adjustable_wrench", "category": "hard-surface" },
+    { "id": "painted_wooden_stool", "category": "hard-surface" },
+    { "id": "WoodenTable_02", "category": "hard-surface" },
+    { "id": "industrial_pipe_lamp", "category": "pipes" },
+    { "id": "modular_industrial_pipes_01", "category": "pipes" },
+    { "id": "modular_electric_cables", "category": "pipes" },
+    { "id": "garden_hose_wall_mounted_01", "category": "pipes" },
+    { "id": "ladder_sectioned_01", "category": "structural" },
+    { "id": "modular_fire_escape", "category": "structural" },
+    { "id": "concrete_cat_statue", "category": "organic" },
+    { "id": "horse_statue_01", "category": "organic" },
+    { "id": "bronze_shark_statue", "category": "organic" },
+    { "id": "boulder_01", "category": "scan" },
+    { "id": "dead_tree_trunk", "category": "scan" },
+    { "id": "coast_rocks_01", "category": "scan" },
+    { "id": "fern_02", "category": "foliage" },
+    { "id": "potted_plant_04", "category": "foliage" }
+  ]
+}

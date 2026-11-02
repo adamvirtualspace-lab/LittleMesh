@@ -1,0 +1,9 @@
+/target
+**/*.rs.bk
+
+# Downloaded sample corpus (see samples/SOURCES.md)
+/samples/corpus/
+/samples/local/
+
+# Debug outputs
+/out/

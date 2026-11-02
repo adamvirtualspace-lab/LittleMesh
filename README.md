@@ -70,6 +70,30 @@ Hands-off unwrapping that thinks like an artist. It isn't a UV editor, just grea
 
 > LittleMesh is in early development. Installation instructions will be added with the first release.
 
+### Building from source
+
+Requires a recent stable [Rust](https://rustup.rs) toolchain.
+
+```bash
+cargo build --release
+```
+
+```bash
+cargo run --release -p lm-cli -- stats path/to/model.glb
+```
+
+```bash
+cargo run --release -p lm-cli -- process path/to/model.obj -o out/model.glb
+```
+
+To fetch the sample corpus (CC0 meshes from Poly Haven, about 80 MB) for testing, run this with [Node.js](https://nodejs.org):
+
+```bash
+node scripts/fetch-samples.mjs
+```
+
+### Planned workflow
+
 ```text
 1. Open LittleMesh and drag in a mesh (or a folder of meshes).
 2. Pick a preset, e.g. "Unreal – Prop" or "Unity – Foliage".
