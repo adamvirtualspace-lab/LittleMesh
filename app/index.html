@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>LittleMesh</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <main id="app">
+      <section id="viewport">
+        <div id="canvas-host"></div>
+
+        <div id="toolbar" hidden>
+          <button id="btn-frame" title="Frame the model (F)">Frame</button>
+          <button id="btn-wire" title="Show wireframe (W)" aria-pressed="false">Wireframe</button>
+          <button id="btn-checker" title="Show a checker texture to judge UV stretch (C)" aria-pressed="false">Checker</button>
+        </div>
+
+        <div id="view-label" hidden></div>
+
+        <div id="empty">
+          <div class="empty-icon" aria-hidden="true"></div>
+          <h1>Drop a mesh here</h1>
+          <p>glTF, GLB or OBJ</p>
+          <button id="btn-open-empty" class="primary" title="Open a file (Ctrl+O)">Open file…</button>
+        </div>
+
+        <div id="drop-hint" hidden><span>Drop to open</span></div>
+      </section>
+
+      <aside id="panel">
+        <header>
+          <span class="brand">LittleMesh</span>
+          <button id="btn-open" title="Open a file (Ctrl+O)">Open…</button>
+        </header>
+
+        <div id="file" hidden>
+          <h2 id="file-name"></h2>
+          <p id="file-summary" class="muted"></p>
+          <dl id="file-stats"></dl>
+        </div>
+
+        <ul id="warnings" hidden></ul>
+
+        <div id="process" hidden>
+          <button id="btn-process" class="primary wide" title="Clean up, optimize and make LODs (Ctrl+Enter)">Process</button>
+          <p id="process-status" class="muted" hidden></p>
+
+          <details id="options">
+            <summary>Options</summary>
+            <label class="check" title="Unwrap new UVs for texturing. On by default only when the file has none.">
+              <input type="checkbox" id="opt-uvs" /> Generate UVs
+            </label>
+            <label class="row" title="The texture size the UVs are packed for. Bigger sizes keep islands closer together.">
+              Texture size
+              <select id="opt-res">
+                <option value="512">512 px</option>
+                <option value="1024">1024 px</option>
+                <option value="2048">2048 px</option>
+                <option value="4096">4096 px</option>
+              </select>
+            </label>
+            <label class="check" title="Make lighter versions of the mesh (50%, 25% and 12.5% of the triangles) for distant views.">
+              <input type="checkbox" id="opt-lods" /> Make LODs
+            </label>
+            <button id="btn-reset" class="link" title="Back to the defaults for this file">Reset options</button>
+          </details>
+        </div>
+
+        <div id="results" hidden>
+          <div class="segmented" role="group" aria-label="Which mesh to show">
+            <button id="btn-view-input" title="The file as loaded">Original</button>
+            <button id="btn-view-output" title="The processed result">Result</button>
+          </div>
+          <div id="lod-picker" class="segmented" role="group" aria-label="LOD level" title="Previous and next LOD: [ and ]"></div>
+          <table id="lod-table"></table>
+          <div id="uv-summary"></div>
+          <button id="btn-export" class="primary wide" title="Save the result as glTF (Ctrl+E)">Export…</button>
+          <p id="export-status" class="muted" hidden></p>
+        </div>
+
+        <p id="error" role="alert" hidden></p>
+      </aside>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

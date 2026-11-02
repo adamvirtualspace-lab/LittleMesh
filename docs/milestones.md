@@ -115,6 +115,16 @@ The UI must be **very easy to use** and **responsive**. These rules are part of 
 | M3.7 | Responsiveness pass: scripted perf check (orbit, toggles, sliders on a 1M-triangle mesh) and fixes | Meets every number in [UI principles](#ui-principles) | M |
 | M3.8 | First-use test: you try a fresh build with no instructions, and anything confusing gets fixed | You get from drag-in to export without help, and every confusing spot is fixed | S |
 
+**Status (first slice):**
+- **Done:** M3.1–M3.3.
+  - The app lives in `app/`, with the Rust side in `app/src-tauri` as workspace crate `lm-app`.
+  - Meshes cross IPC as one raw buffer. A 680k-triangle scan is on screen 295 ms after opening.
+  - The app's export is byte-identical to the CLI's for the same settings.
+- **Started:**
+  - M3.4: the checker material only.
+  - M3.5: Process and Export with three options, but no progress events or Cancel yet.
+  - M3.6: LOD buttons, but no side-by-side view or distance scrubber yet.
+
 **Your part:** use the app on your own meshes and report what feels clunky or slow. UI polish is mostly taste, so your notes drive M3.8.
 
 ---

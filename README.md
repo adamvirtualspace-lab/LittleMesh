@@ -72,11 +72,33 @@ Hands-off unwrapping that thinks like an artist. It isn't a UV editor, just grea
 
 ### Building from source
 
-Requires a recent stable [Rust](https://rustup.rs) toolchain.
+Requires a recent stable [Rust](https://rustup.rs) toolchain, a C++ compiler (for the bundled xatlas), and [Node.js](https://nodejs.org) for the desktop app.
+
+#### The desktop app
 
 ```bash
-cargo build --release
+cd app
+npm ci
+npm run tauri dev
 ```
+
+`npm run tauri dev` starts the app with live reload. `npx tauri build` makes a release build and installer, and `npx tauri build --no-bundle` makes the executable only. You can also pass a file to open on the command line, as "Open with" does: `littlemesh-app path/to/model.glb`.
+
+Drop a mesh on the window, press **Process**, then **Export**. Shortcuts:
+
+| Key | Action |
+| --- | --- |
+| Ctrl+O | Open a file |
+| Ctrl+Enter | Process |
+| Ctrl+E | Export |
+| F | Frame the model |
+| W | Toggle wireframe |
+| C | Toggle the UV checker |
+| [ and ] | Previous and next LOD |
+
+#### The command line
+
+The app crate embeds the built frontend, so build that first (`npm ci` and `npm run build` in `app/`) before building the whole workspace with `cargo build --release`. The CLI alone needs only Rust:
 
 ```bash
 cargo run --release -p lm-cli -- stats path/to/model.glb

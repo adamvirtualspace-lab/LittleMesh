@@ -1,0 +1,23 @@
+[package]
+name = "lm-app"
+description = "LittleMesh desktop app: a Tauri shell over lm-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "littlemesh-app"
+path = "src/main.rs"
+
+[build-dependencies]
+tauri-build = { version = "2.7.4", features = [] }
+
+[dependencies]
+lm-core = { path = "../../crates/lm-core" }
+serde = { version = "1.0.229", features = ["derive"] }
+tauri = { version = "2.12.5", features = [] }
+tauri-plugin-dialog = "2.8.4"
+
+[lints]
+workspace = true
