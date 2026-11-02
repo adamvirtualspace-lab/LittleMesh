@@ -7,7 +7,7 @@
 A standalone app for getting 3D assets ready for real-time engines: optimize, retopo, UVs, LODs, and impostors in one place.
 
 ![status](https://img.shields.io/badge/status-early%20development-orange)
-![license](https://img.shields.io/badge/license-TBD-lightgrey)
+![license](https://img.shields.io/badge/license-MIT-blue)
 
 </div>
 
@@ -33,8 +33,10 @@ One-click retopology. No manual drawing or edge-loop tools, just a clean result 
 - **Detail baking**: bakes normal and AO maps from the original high-poly onto the new mesh automatically.
 
 ### Auto UVs
-Hands-off unwrapping. It isn't a full UV editor, just good-enough UVs without the busywork.
-- **Automatic seams and unwrap**: low-distortion unwraps with no seam painting.
+Hands-off unwrapping that thinks like an artist. It isn't a UV editor, just great UVs without the busywork.
+- **Shape-aware unwrapping**: detects what each part is (flat panels, boxes, quad strips, pipes, cones, bent tubes, caps, organic shapes) and unwraps each with a method built for it. Pipes and strips come out as straight rectangles.
+- **Hidden seams**: seams go into creases, hard edges, and places nobody looks.
+- **Repeated parts**: detects duplicates like bolts, with optional stacking to save texture space.
 - **Auto packing**: packs islands efficiently, with padding matched to the target texture resolution.
 - **Lightmap UVs**: generates non-overlapping second UV channels for baked lighting.
 
@@ -90,16 +92,22 @@ Custom presets can be saved and shared as files.
 
 ## Roadmap
 
+**v0.1**
 - [ ] Mesh cleanup and render optimization
-- [ ] One-click retopology with detail baking
-- [ ] Automatic UV unwrapping, packing, and lightmap UVs
-- [ ] Core LOD generation with quality metrics
-- [ ] Octahedral impostor baking
-- [ ] Live LOD / impostor preview
-- [ ] Batch processing and presets
-- [ ] Engine-specific export presets
+- [ ] Core LOD generation with screen-size suggestions
+- [ ] Shape-aware automatic UV unwrapping, packing, and lightmap UVs
+- [ ] Live preview: checker, UV layout, LOD scrubber
 - [ ] Command-line mode for pipeline integration
+
+**Later**
+- [ ] Octahedral impostor baking
+- [ ] One-click retopology with detail baking
+- [ ] Batch processing and presets
+- [ ] FBX and USD support
+- [ ] Engine-specific export presets
 - [ ] Unreal and Unity import helpers (auto-setup of LOD groups and impostor materials)
+
+See [plan.md](plan.md) and [docs/milestones.md](docs/milestones.md) for details.
 
 ## Contributing
 
@@ -107,4 +115,4 @@ Feedback, bug reports, and feature ideas are welcome. Please open an issue descr
 
 ## License
 
-TBD
+LittleMesh is released under the [MIT License](LICENSE).

@@ -4,126 +4,101 @@
 
 This plan covers what LittleMesh is, what it deliberately isn't, how it's built, and the order to build it in. Anything marked **Decision** is still open.
 
+Detailed docs:
+- [docs/milestones.md](docs/milestones.md): every milestone broken into tasks with acceptance checks.
+- [docs/algorithms.md](docs/algorithms.md): how each v0.1 stage works, with Auto UVs in depth.
+- [docs/later.md](docs/later.md): research notes for impostors, retopo, and baking (after v0.1).
+
 ---
 
 ## 1. Goals
 
-1. **One-stop asset prep**: take a raw mesh in and get an engine-ready asset out (cleaned, retopologized, unwrapped, LODs, impostor).
-2. **Automatic first**: every stage should produce a good result with zero tweaking. Sliders exist for adjustment, not as the main workflow.
-3. **Batch-friendly**: process a whole folder with one preset as easily as a single mesh.
-4. **Portfolio-grade**: clean, public codebase and docs that show technical-art and tools-engineering skill.
+1. **Fast, lean v0.1:** ship a small, solid tool first and grow it afterwards.
+2. **Auto UVs as the headline:** fully automatic unwrapping that detects what kind of shape each part is and uses a specialized method for it, the way an artist would.
+3. **Automatic first:** every stage gives a good result with zero tweaking. Options exist for adjustment, not as the main workflow.
+4. **Very easy to use and responsive UI:** a first-time user goes from drag-in to export without reading docs, and the app never freezes, even on a 1M-triangle mesh. The concrete rules are in [UI principles](docs/milestones.md#ui-principles).
+5. **Portfolio-grade:** a clean, public codebase and docs that show technical-art and tools-engineering skill.
+
+**Way of working:** Claude builds most of the code. You steer, review results, and test in your own tools.
 
 ## 2. Scope
 
-### In scope
+### v0.1
 | Stage | What it does |
 | --- | --- |
-| Optimize | Cleanup (weld, degenerate/loose removal), vertex cache and overdraw optimization, mesh stats and warnings |
-| Auto Retopo | One-click remesh to a triangle/quad budget, plus normal/AO bake from the source |
-| Auto UVs | Automatic seams, unwrap, packing, and lightmap UV channel |
+| Import / export | glTF/GLB and OBJ in, glTF/GLB out |
+| Optimize | Cleanup (weld, degenerates, unused data), vertex cache and overdraw optimization, stats and warnings |
+| Auto UVs | Multi-strategy automatic unwrap (planar, box, quad strip, cylinder, cone, bent tube, cap, organic, repeated parts), packing, lightmap UV channel |
 | LODs | Automatic LOD chain with screen-size suggestions |
-| Impostors | Octahedral, hemi-octahedral, and billboard bakes with texture atlases |
+| App + CLI | Tauri app with live preview (checker, UV layout, LOD scrubber) and a CLI on the same core |
+
+### Later (v0.2+)
+Impostors, auto retopo and baking, presets and batch, FBX/USD, engine presets and import helpers. The order is in [milestones.md](docs/milestones.md#later-v02).
 
 ### Out of scope (on purpose)
-- Manual UV editing, seam painting, or a UV editor (that's Cozy Blanket territory).
+- Manual UV editing, seam painting, or a UV editor.
 - Manual retopo tools such as drawing quads or edge loops.
 - Sculpting, modeling, or texturing.
-- Rigged or skinned mesh support in v1 (see Later).
+- Rigged or skinned mesh support.
 
-## 3. Proposed architecture
+## 3. Architecture
 
 ```
 ┌──────────────────────────────────────────────┐
-│ UI shell (Tauri)                             │
-│  ├─ Panels, presets, batch queue (TS)        │
-│  └─ Viewport: three.js / WebGPU              │
+│ App (Tauri 2)                                │
+│  ├─ Panels and pipeline options (TS)         │
+│  └─ Viewport: three.js                       │
 ├──────────────────────────────────────────────┤
-│ Core (Rust)                                  │
-│  ├─ io/        import & export               │
-│  ├─ optimize/  cleanup, cache opt            │
-│  ├─ retopo/    remesh + bake                 │
-│  ├─ uv/        unwrap, pack, lightmap UVs    │
+│ lm-core (Rust)                               │
+│  ├─ mesh/      mesh type, half-edge view     │
+│  ├─ io/        glTF + OBJ import, glTF export│
+│  ├─ optimize/  cleanup, render optimization  │
+│  ├─ uv/        analysis, classify, strategies│
+│  │             solvers, pack, metrics        │
 │  ├─ lod/       simplification chain          │
-│  ├─ impostor/  capture + atlas bake (wgpu)   │
-│  └─ pipeline/  presets, job graph, batch     │
+│  └─ pipeline/  stages, progress, cancel      │
 ├──────────────────────────────────────────────┤
-│ CLI (same core, no UI)                       │
+│ lm-cli (same core): stats, process, bench    │
 └──────────────────────────────────────────────┘
 ```
 
-**Why this stack:** it reuses the TS + three.js/WebGPU + Rust experience from Organic Machines, keeps heavy processing native and fast, and gets a CLI almost for free.
+**Decided:** Tauri 2 + Rust. C++ + Qt was the alternative, with easier access to some geometry libraries, but Rust is safer and closer to existing skills. C++ libraries come in through thin FFI bindings. The CLI is built before the app, so every stage can be tested headlessly.
 
-**Decision:** Tauri + Rust (proposed) or C++ + Qt. C++ has easier access to some geometry libraries; Rust is safer and closer to existing skills.
-
-### Candidate libraries
+### Libraries
 | Area | Library | License | Notes |
 | --- | --- | --- | --- |
-| Simplification / cache opt | meshoptimizer | MIT | Industry standard, Rust bindings via `meshopt` |
-| UV unwrap + pack | xatlas | MIT | Also handles lightmap UVs |
-| Retopo | Instant Meshes / QuadriFlow | BSD / MIT | Evaluate both for quality and speed |
+| Simplification, cache optimization | meshoptimizer | MIT | Via the `meshopt` crate, or our own bindings if the crate lags behind |
+| UV baseline and packing | xatlas | MIT | Default unwrap as the baseline; packer for our own charts |
+| Sparse linear algebra | faer | MIT | LSCM, ARAP, and harmonic solves |
 | glTF | `gltf` crate | MIT / Apache | Import and export |
-| FBX import | ufbx | MIT / public domain | Read-only |
-| USD | OpenUSD | Apache-style | Heavy dependency, could land in a later phase |
-| GPU baking | wgpu | MIT / Apache | Impostor capture and normal/AO bakes |
+| OBJ | `tobj` | MIT | Import |
+| CLI | `clap` | MIT / Apache | |
 
 Verify every license before shipping, and keep a `THIRD_PARTY_LICENSES` file.
 
 ## 4. Milestones
 
-### M0 — Foundations
-- [ ] Repo, CI, and app shell (Tauri window and empty viewport)
-- [ ] glTF and OBJ import into the internal mesh format
-- [ ] Viewport: orbit, wireframe, and stats overlay
+| Milestone | Focus | Size |
+| --- | --- | --- |
+| M0 | Core + CLI foundations | M |
+| M1 | Optimize + LODs | M |
+| M2 | Auto UVs: foundation (xatlas baseline, metrics, solvers, organic unwrap) | L |
+| M3 | App + viewer | L |
+| M4 | Auto UVs: specialized strategies + tuning | XL |
+| M5 | Release v0.1 (Windows) | M |
 
-### M1 — Optimize + LODs (first usable build)
-- [ ] Cleanup pass (weld, degenerates, loose parts)
-- [ ] Vertex cache and overdraw optimization
-- [ ] LOD chain generation with %, triangle-count, or screen-size targets
-- [ ] Side-by-side LOD preview with a distance scrubber
-- [ ] glTF export with LODs
-
-### M2 — Impostors
-- [ ] Octahedral and hemi-octahedral capture with wgpu
-- [ ] Atlases: base color, normal, depth, mask/ORM
-- [ ] Billboard and cross-card fallback
-- [ ] Impostor as the final LOD
-- [ ] Reference impostor shaders/materials for Unreal and Unity
-
-### M3 — Auto UVs + Auto Retopo
-- [ ] xatlas integration: unwrap, pack, and lightmap channel
-- [ ] Retopo backend evaluation, then integration
-- [ ] Normal/AO bake from source to retopo mesh
-- [ ] Before/after comparison view
-
-### M4 — Pipeline
-- [ ] Presets (Prop, Foliage, Hero, Clutter) that can be saved and shared
-- [ ] Batch queue for folder in, folder out
-- [ ] CLI mode with the same presets
-- [ ] FBX import
-
-### M5 — Release
-- [ ] Engine export presets (Unreal, Unity, Godot)
-- [ ] Docs site, sample assets, before/after gallery
-- [ ] Installers (Windows first)
-- [ ] Public v0.1 release
-
-### Later
-- USD import and export
-- Unreal and Unity import helpers (auto-setup of LOD groups and impostor materials)
-- Skinned mesh LODs
-- Nanite-aware presets (fallback meshes)
+The tasks, acceptance checks, and what each milestone needs from you are in [docs/milestones.md](docs/milestones.md).
 
 ## 5. Risks and open questions
 
-- **FBX export**: ufbx can't write FBX, and the Autodesk FBX SDK has redistribution terms to check. Option: ship glTF/USD export first and add FBX later.
-- **Retopo quality**: automatic retopo is hard on thin or hard-surface parts. Keep the promise to "good enough for background assets" and point to dedicated tools for hero work.
-- **Impostor fidelity**: parallax and depth-based blending live in the engine shader, so reference materials matter as much as the bake.
-- **Scope creep**: the out-of-scope list is a contract, so revisit it before adding any manual tool.
-- **Clean-room code**: write everything fresh, with no code or assets taken from workplace tools.
-- **Distribution**: **Decision.** Fully free, free core with paid extras, or paid on Gumroad/itch. Re-check the license choice once this is settled.
+- **Auto UV quality is a taste problem.** Metrics catch flips, stretch, and seam length, but not "this seam looks wrong". Tuning (M4.7) needs your review, and it's the part most likely to run long.
+- **Clean-room code:** write everything fresh. That means no code or assets from workplace tools, and no decompiling, reverse-engineering, or bundling other unwrappers (for example Ministry of Flat). Features can be inspired by public descriptions; implementations come from published research.
+- **Crate gaps:** the `meshopt` crate may not expose every upstream feature, and xatlas's packer has to keep our charts intact. Both get checked first in their milestones, with our own bindings as the fallback.
+- **Scope creep:** the out-of-scope list and the Later list are a contract. Revisit them before adding anything to v0.1.
+- **Distribution:** **Decision.** Fully free, free core with paid extras, or paid. LittleMesh is MIT today, so re-check the license once this is settled.
 
 ## 6. Success criteria for v0.1
 
-- Drop in a 1M-triangle scan and get a cleaned, retopo'd, UV'd mesh with 3 LODs and an impostor in under a minute, with no settings touched.
-- Batch-process 100 props with one preset without crashing.
-- Output imports cleanly into Unreal and Unity with correct LODs and working impostor materials.
+- Drop in a typical prop or a 1M-triangle scan, and get a cleaned mesh with Auto UVs, UV1 lightmap UVs, and 3 LODs as glTF, with no settings touched.
+- Auto UVs: zero flips and overlaps on the whole corpus, and better than the xatlas baseline on angle distortion and visible seam length on at least 80% of it.
+- Output opens cleanly in Blender, Unreal, and Unity with UVs and LODs intact.
