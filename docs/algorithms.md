@@ -52,11 +52,17 @@ Report ACMR (average cache miss ratio) before and after, using `analyzeVertexCac
 - meshoptimizer's simplifier is a **quadric error metric (QEM)** edge collapser (Garland & Heckbert). Use the **attribute-aware** variant (`meshopt_simplifyWithAttributes`) with starting weights normals `0.5` and UVs `1.0`.
 - Split vertices (§2) let the simplifier see UV and normal seams, so collapses keep seam edges together instead of tearing them.
 - `LockBorder` is an option for open meshes whose edges must stay put. It's off by default.
-- When the attribute-aware simplifier stalls well above its target, fall back to `simplifySloppy` and mark that LOD as "sloppy" in the stats.
+- **Fallback ladder**, used only when a step stalls more than 10% above its target:
+  1. Standard attribute-aware simplification.
+  2. **Permissive:** collapses may cross UV and normal seams. Topology stays intact, but UVs can stretch near seams. Scans need this, since nearly every edge on them is a seam.
+  3. **Sloppy:** `simplifySloppy` ignores topology but always reaches its target.
+
+  Each LOD reports which method it used. On the M1 corpus run, 262 of 338 levels needed only the standard step, 76 needed permissive, and none needed sloppy.
+- Submeshes are simplified separately with `ErrorAbsolute`. Vertices whose position is shared by more than one submesh are locked, so material borders can't crack.
 - **Targets:** triangle % (`3 × round(tris × pct)` indices) or a triangle count. `result_error` × `meshopt_simplifyScale` gives the world-space error `e`.
 - **Default chain:** 50%, 25%, 12.5% of LOD0. Stop early when a level saves under 15% of the previous level's triangles.
 
-> **First check (M1.4):** the `meshopt` Rust crate can lag behind upstream meshoptimizer. If it doesn't expose `simplifyWithAttributes`, generate our own bindings with `bindgen` plus `cc`. meshoptimizer is a handful of C++ files.
+> **Checked in M1:** the `meshopt` 0.7 crate bundles meshoptimizer 1.3 and exposes `simplifyWithAttributes` with vertex locks, so we don't need our own bindings. Avoid its `optimize_vertex_fetch_remap`: it truncates the remap table to the used-vertex count, which breaks lookups. LittleMesh compacts vertices in first-use order itself.
 
 ## 6. Screen-size suggestions
 

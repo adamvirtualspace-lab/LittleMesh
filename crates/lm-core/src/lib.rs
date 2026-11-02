@@ -2,7 +2,10 @@
 
 pub mod halfedge;
 pub mod io;
+pub mod lod;
 pub mod mesh;
+pub mod optimize;
+pub mod pipeline;
 pub mod primitives;
 pub mod stats;
 

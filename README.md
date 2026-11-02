@@ -83,8 +83,10 @@ cargo run --release -p lm-cli -- stats path/to/model.glb
 ```
 
 ```bash
-cargo run --release -p lm-cli -- process path/to/model.obj -o out/model.glb
+cargo run --release -p lm-cli -- process path/to/model.obj -o out/model.glb --lods
 ```
+
+`--lods` on its own builds 50%, 25%, and 12.5% levels. You can also give your own targets, such as `--lods 30%,10%` or `--lods 5000,1000`.
 
 To fetch the sample corpus (CC0 meshes from Poly Haven, about 80 MB) for testing, run this with [Node.js](https://nodejs.org):
 
