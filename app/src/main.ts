@@ -195,7 +195,7 @@ async function openPath(path: string) {
 async function chooseFile() {
   const path = await open({
     multiple: false,
-    filters: [{ name: "3D models", extensions: ["gltf", "glb", "obj"] }],
+    filters: [{ name: "3D models", extensions: ["gltf", "glb", "obj", "fbx"] }],
   });
   if (typeof path === "string") {
     await openPath(path);

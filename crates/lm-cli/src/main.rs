@@ -67,7 +67,7 @@ enum Command {
     },
     /// Process every model in a folder with default LODs and write a CSV of the results.
     Bench {
-        /// Folder searched recursively for .gltf, .glb, and .obj files.
+        /// Folder searched recursively for .gltf, .glb, .obj, and .fbx files.
         dir: PathBuf,
         /// CSV output file. UV metrics go next to it as `<name>_uv.csv`.
         #[arg(short, long, default_value = "bench.csv")]
@@ -321,7 +321,7 @@ fn find_models(dir: &Path, out: &mut Vec<PathBuf>) -> Result<()> {
         if path.is_dir() {
             find_models(&path, out)?;
         } else if let Some(ext) = path.extension().and_then(|e| e.to_str())
-            && ["gltf", "glb", "obj"].contains(&ext.to_ascii_lowercase().as_str())
+            && ["gltf", "glb", "obj", "fbx"].contains(&ext.to_ascii_lowercase().as_str())
         {
             out.push(path);
         }
@@ -367,7 +367,7 @@ fn bench(dir: &Path, output: &Path, uv: bool) -> Result<()> {
     find_models(dir, &mut files)?;
     anyhow::ensure!(
         !files.is_empty(),
-        "no .gltf, .glb, or .obj files in {}",
+        "no .gltf, .glb, .obj, or .fbx files in {}",
         dir.display()
     );
 

@@ -57,10 +57,10 @@ fn process_then_stats() {
 
 #[test]
 fn unsupported_format_fails_cleanly() {
-    let out = littlemesh(&["stats", "model.fbx"]);
+    let out = littlemesh(&["stats", "model.usd"]);
     assert!(!out.status.success());
     let stderr = String::from_utf8_lossy(&out.stderr);
-    assert!(stderr.contains("cannot import '.fbx' files"), "{stderr}");
+    assert!(stderr.contains("cannot import '.usd' files"), "{stderr}");
 }
 
 /// A wavy `n × n` quad grid as OBJ text, dense enough to simplify.

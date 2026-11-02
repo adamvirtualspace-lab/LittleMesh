@@ -72,7 +72,7 @@ Hands-off unwrapping that thinks like an artist. It isn't a UV editor, just grea
 
 ### Building from source
 
-Requires a recent stable [Rust](https://rustup.rs) toolchain, a C++ compiler (for the bundled xatlas), and [Node.js](https://nodejs.org) for the desktop app.
+Requires a recent stable [Rust](https://rustup.rs) toolchain, a C/C++ compiler (for the bundled xatlas and ufbx), and [Node.js](https://nodejs.org) for the desktop app.
 
 #### The desktop app
 
@@ -153,7 +153,8 @@ Custom presets can be saved and shared as files.
 - [ ] Octahedral impostor baking
 - [ ] One-click retopology with detail baking
 - [ ] Batch processing and presets
-- [ ] FBX and USD support
+- [x] FBX import
+- [ ] USD support and FBX export
 - [ ] Engine-specific export presets
 - [ ] Unreal and Unity import helpers (auto-setup of LOD groups and impostor materials)
 

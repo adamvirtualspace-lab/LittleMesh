@@ -1957,6 +1957,7 @@ dependencies = [
  "base64 0.23.1",
  "glam",
  "gltf",
+ "lm-ufbx",
  "lm-xatlas",
  "meshopt",
  "png",
@@ -1965,6 +1966,13 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.21",
  "tobj",
+]
+
+[[package]]
+name = "lm-ufbx"
+version = "0.0.1"
+dependencies = [
+ "cc",
 ]
 
 [[package]]

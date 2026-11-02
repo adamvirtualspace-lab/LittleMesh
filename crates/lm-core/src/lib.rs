@@ -22,6 +22,8 @@ pub enum Error {
     Gltf(#[from] gltf::Error),
     #[error("OBJ error: {0}")]
     Obj(#[from] tobj::LoadError),
+    #[error("FBX error: {0}")]
+    Fbx(#[from] lm_ufbx::Error),
     #[error("unsupported file type: {0}")]
     UnsupportedFormat(String),
     #[error("invalid mesh '{mesh}': {reason}")]

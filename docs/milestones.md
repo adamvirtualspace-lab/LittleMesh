@@ -169,5 +169,5 @@ In rough priority order. Design notes for the first three are in [later.md](late
 2. **Auto retopo** plus normal/AO **baking**.
 3. **Presets and batch:** Prop, Foliage, Hero, and Clutter presets; folder in, folder out.
 4. More UV classes: torus/ring, extrusion profiles, and branching tubes (trees). Also UDIM tiles, our own packer, and SLIM for hard organic cases.
-5. FBX import (ufbx), USD import and export.
+5. USD import and export, and FBX export. (FBX import through ufbx is done.)
 6. Engine export presets (axes, units, normal-map green channel) and Unreal/Unity import helpers.

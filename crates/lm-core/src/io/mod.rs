@@ -1,5 +1,6 @@
 //! File import and export.
 
+mod fbx_import;
 mod gltf_export;
 mod gltf_import;
 mod obj_import;
@@ -22,11 +23,12 @@ fn extension(path: &Path) -> String {
         .to_ascii_lowercase()
 }
 
-/// Loads a glTF/GLB or OBJ file, picked by extension.
+/// Loads a glTF/GLB, OBJ or FBX file, picked by extension.
 pub fn load(path: &Path) -> Result<Import> {
     let import = match extension(path).as_str() {
         "gltf" | "glb" => gltf_import::load(path)?,
         "obj" => obj_import::load(path)?,
+        "fbx" => fbx_import::load(path)?,
         other => {
             return Err(Error::UnsupportedFormat(format!(
                 "cannot import '.{other}' files"

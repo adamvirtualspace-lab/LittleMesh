@@ -72,6 +72,7 @@ Impostors, auto retopo and baking, presets and batch, FBX/USD, engine presets an
 | Sparse linear algebra | faer | MIT | LSCM, ARAP, and harmonic solves |
 | glTF | `gltf` crate | MIT / Apache | Import and export |
 | OBJ | `tobj` | MIT | Import |
+| FBX | ufbx | MIT / public domain | Import, vendored like xatlas |
 | CLI | `clap` | MIT / Apache | |
 
 Verify every license before shipping, and keep a `THIRD_PARTY_LICENSES` file.
