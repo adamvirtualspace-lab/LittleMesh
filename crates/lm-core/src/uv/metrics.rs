@@ -56,8 +56,58 @@ type EdgeSide = (usize, [[u32; 2]; 2]);
 /// An edge counts as straight within this angle of an axis (about 1°).
 const STRAIGHT_SIN: f64 = 0.0175;
 
-/// Measures UV channel `channel`; `None` if the mesh doesn't have it.
-pub fn uv_metrics(mesh: &Mesh, channel: usize, raster_resolution: u32) -> Option<UvMetrics> {
+/// Per-triangle UV structure shared by the metrics and the debug outputs.
+pub(crate) struct Layout {
+    /// Sheet (material group) of each triangle.
+    pub sheet_of: Vec<usize>,
+    pub sheet_count: usize,
+    /// Island of each triangle, numbered from 0.
+    pub island_of: Vec<usize>,
+    pub island_count: usize,
+    pub area3: Vec<f64>,
+    /// Signed UV area, measured with V flipped.
+    pub area_uv: Vec<f64>,
+    /// Singular values of each triangle's 3D → UV Jacobian.
+    pub sigma: Vec<(f64, f64)>,
+    /// Area-weighted orientation per island; negative means mirrored.
+    pub orientation: Vec<f64>,
+    /// UV-to-3D area ratio per sheet.
+    pub scale: Vec<f64>,
+    /// Island boundary edges as (triangle, vertex a, vertex b).
+    pub boundary: Vec<(usize, u32, u32)>,
+    /// Total 3D length of seam edges.
+    pub seam_length: f64,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum TriangleState {
+    Good,
+    /// Wound against the rest of its island.
+    Flipped,
+    /// 3D area but no UV area.
+    ZeroArea,
+    /// No 3D area, so nothing to measure.
+    Degenerate,
+}
+
+impl Layout {
+    pub fn state(&self, t: usize) -> TriangleState {
+        if self.area3[t] == 0.0 {
+            return TriangleState::Degenerate;
+        }
+        let (s1, s2) = self.sigma[t];
+        if s1 * s2 <= self.scale[self.sheet_of[t]] * 1e-9 || self.area_uv[t] == 0.0 {
+            TriangleState::ZeroArea
+        } else if self.area_uv[t].signum() * self.orientation[self.island_of[t]] < 0.0 {
+            TriangleState::Flipped
+        } else {
+            TriangleState::Good
+        }
+    }
+}
+
+/// Builds the [`Layout`] of UV channel `channel`; `None` if the mesh doesn't have it.
+pub(crate) fn layout(mesh: &Mesh, channel: usize) -> Option<Layout> {
     let uvs = mesh.uvs.get(channel)?;
     let tri_count = mesh.triangle_count();
     // glTF's V points down, so flip it to measure winding in a right-handed frame.
@@ -186,9 +236,7 @@ pub fn uv_metrics(mesh: &Mesh, channel: usize, raster_resolution: u32) -> Option
     for t in 0..tri_count {
         orientation[island_of[t]] += area3[t] * area_uv[t].signum();
     }
-    let mirrored_islands = orientation.iter().filter(|&&o| o < 0.0).count();
 
-    let total_area3: f64 = area3.iter().sum();
     let mut sheet_area3 = vec![0.0f64; sheet_count];
     let mut sheet_area_uv = vec![0.0f64; sheet_count];
     for t in 0..tri_count {
@@ -206,23 +254,68 @@ pub fn uv_metrics(mesh: &Mesh, channel: usize, raster_resolution: u32) -> Option
         })
         .collect();
 
+    Some(Layout {
+        sheet_of,
+        sheet_count,
+        island_of,
+        island_count,
+        area3,
+        area_uv,
+        sigma,
+        orientation,
+        scale,
+        boundary,
+        seam_length,
+    })
+}
+
+/// Measures UV channel `channel`; `None` if the mesh doesn't have it.
+pub fn uv_metrics(mesh: &Mesh, channel: usize, raster_resolution: u32) -> Option<UvMetrics> {
+    let uvs = mesh.uvs.get(channel)?;
+    let l = layout(mesh, channel)?;
+    let tri_count = mesh.triangle_count();
+    let uv = |v: u32| {
+        let t = uvs[v as usize];
+        DVec2::new(f64::from(t.x), -f64::from(t.y))
+    };
+    let tri = |t: usize| -> [u32; 3] { [0, 1, 2].map(|k| mesh.indices[t * 3 + k]) };
+    let Layout {
+        sheet_of,
+        sheet_count,
+        island_of,
+        island_count,
+        area3,
+        area_uv,
+        sigma,
+        orientation,
+        scale,
+        boundary,
+        seam_length,
+    } = &l;
+    let (sheet_count, island_count) = (*sheet_count, *island_count);
+    let mirrored_islands = orientation.iter().filter(|&&o| o < 0.0).count();
+    let total_area3: f64 = area3.iter().sum();
+    let mut sheet_area_uv = vec![0.0f64; sheet_count];
+    for t in 0..tri_count {
+        sheet_area_uv[sheet_of[t]] += area_uv[t].abs();
+    }
+
     let mut flipped = 0;
     let mut zero_area = 0;
     let mut weighted_angles: Vec<(f64, f64)> = Vec::with_capacity(tri_count);
     let (mut angle_sum, mut area_dist_sum, mut l2_sum, mut measured_area) = (0.0, 0.0, 0.0, 0.0);
     for t in 0..tri_count {
-        if area3[t] == 0.0 {
-            continue;
+        match l.state(t) {
+            TriangleState::Degenerate => continue,
+            TriangleState::ZeroArea => {
+                zero_area += 1;
+                continue;
+            }
+            TriangleState::Flipped => flipped += 1,
+            TriangleState::Good => {}
         }
         let s = scale[sheet_of[t]];
         let (s1, s2) = sigma[t];
-        if s1 * s2 <= s * 1e-9 || area_uv[t] == 0.0 {
-            zero_area += 1;
-            continue;
-        }
-        if area_uv[t].signum() * orientation[island_of[t]] < 0.0 {
-            flipped += 1;
-        }
         let w = area3[t];
         let angle = s1 / s2;
         angle_sum += w * angle;
@@ -260,7 +353,7 @@ pub fn uv_metrics(mesh: &Mesh, channel: usize, raster_resolution: u32) -> Option
     }
 
     let (mut straight_len, mut boundary_len) = (0.0, 0.0);
-    for &(_, a, b) in &boundary {
+    for &(_, a, b) in boundary {
         let d = uv(b) - uv(a);
         let len = d.length();
         boundary_len += len;
@@ -278,7 +371,7 @@ pub fn uv_metrics(mesh: &Mesh, channel: usize, raster_resolution: u32) -> Option
         })
         .count();
 
-    let overlap_texels = overlaps(mesh, uvs, &sheet_of, sheet_count, raster_resolution);
+    let overlap_texels = overlaps(mesh, uvs, sheet_of, sheet_count, raster_resolution);
 
     Some(UvMetrics {
         channel,
@@ -315,8 +408,7 @@ pub fn uv_metrics(mesh: &Mesh, channel: usize, raster_resolution: u32) -> Option
 }
 
 /// Counts texels whose centre lies strictly inside more than one triangle of
-/// the same sheet. Centres exactly on a shared edge count for neither side,
-/// so neighbouring triangles never register as overlapping.
+/// the same sheet.
 fn overlaps(
     mesh: &Mesh,
     uvs: &[glam::Vec2],
@@ -325,48 +417,61 @@ fn overlaps(
     resolution: u32,
 ) -> usize {
     let res = resolution as usize;
-    let mut total = 0;
     let mut hits = vec![0u8; res * res];
-    for sheet in 0..sheet_count {
-        hits.fill(0);
-        for (t, corners) in mesh.indices.as_chunks::<3>().0.iter().enumerate() {
-            if sheet_of[t] != sheet {
-                continue;
-            }
-            let p = corners.map(|v| {
-                let uv = uvs[v as usize];
-                DVec2::new(f64::from(uv.x), f64::from(uv.y)) * resolution as f64
-            });
-            let doubled = (p[1] - p[0]).perp_dot(p[2] - p[0]);
-            if doubled == 0.0 {
-                continue;
-            }
-            let lo = p[0].min(p[1]).min(p[2]);
-            let hi = p[0].max(p[1]).max(p[2]);
-            let x0 = (lo.x - 0.5).ceil().max(0.0) as usize;
-            let y0 = (lo.y - 0.5).ceil().max(0.0) as usize;
-            let x1 = ((hi.x - 0.5).floor() as i64).min(res as i64 - 1);
-            let y1 = ((hi.y - 0.5).floor() as i64).min(res as i64 - 1);
-            if x1 < 0 || y1 < 0 {
-                continue;
-            }
-            for y in y0..=y1 as usize {
-                for x in x0..=x1 as usize {
-                    let c = DVec2::new(x as f64 + 0.5, y as f64 + 0.5);
-                    let w =
-                        [0, 1, 2].map(|k| edge_side(p[k], p[(k + 1) % 3], c) * doubled.signum());
-                    if w.iter().all(|&w| w > 0.0) {
-                        let h = &mut hits[y * res + x];
-                        *h = h.saturating_add(1);
-                        if *h == 2 {
-                            total += 1;
-                        }
-                    }
+    (0..sheet_count)
+        .map(|sheet| {
+            coverage(mesh, uvs, sheet_of, sheet, resolution, &mut hits);
+            hits.iter().filter(|&&h| h >= 2).count()
+        })
+        .sum()
+}
+
+/// Fills `hits` (row-major, `resolution`², row 0 at V = 0) with how many
+/// triangles of `sheet` cover each texel centre, saturating at 255. Centres
+/// exactly on a shared edge count for neither side, so neighbouring triangles
+/// never register as overlapping.
+pub(crate) fn coverage(
+    mesh: &Mesh,
+    uvs: &[glam::Vec2],
+    sheet_of: &[usize],
+    sheet: usize,
+    resolution: u32,
+    hits: &mut [u8],
+) {
+    let res = resolution as usize;
+    hits.fill(0);
+    for (t, corners) in mesh.indices.as_chunks::<3>().0.iter().enumerate() {
+        if sheet_of[t] != sheet {
+            continue;
+        }
+        let p = corners.map(|v| {
+            let uv = uvs[v as usize];
+            DVec2::new(f64::from(uv.x), f64::from(uv.y)) * resolution as f64
+        });
+        let doubled = (p[1] - p[0]).perp_dot(p[2] - p[0]);
+        if doubled == 0.0 {
+            continue;
+        }
+        let lo = p[0].min(p[1]).min(p[2]);
+        let hi = p[0].max(p[1]).max(p[2]);
+        let x0 = (lo.x - 0.5).ceil().max(0.0) as usize;
+        let y0 = (lo.y - 0.5).ceil().max(0.0) as usize;
+        let x1 = ((hi.x - 0.5).floor() as i64).min(res as i64 - 1);
+        let y1 = ((hi.y - 0.5).floor() as i64).min(res as i64 - 1);
+        if x1 < 0 || y1 < 0 {
+            continue;
+        }
+        for y in y0..=y1 as usize {
+            for x in x0..=x1 as usize {
+                let c = DVec2::new(x as f64 + 0.5, y as f64 + 0.5);
+                let w = [0, 1, 2].map(|k| edge_side(p[k], p[(k + 1) % 3], c) * doubled.signum());
+                if w.iter().all(|&w| w > 0.0) {
+                    let h = &mut hits[y * res + x];
+                    *h = h.saturating_add(1);
                 }
             }
         }
     }
-    total
 }
 
 /// Which side of edge `a → b` the point `c` is on. The arithmetic depends only

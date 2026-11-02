@@ -269,6 +269,7 @@ For each triangle, take the Jacobian `J` of the map from the 3D triangle (in its
   - Its chart growing (the boundary-intersection checks) runs single-threaded per connected part and scales worse than linearly: about 5 s at 22k triangles, 21 s at 66k, 43 s at 100k, and 16.5 minutes on the 680k-triangle scan. That's fine for a yardstick but far off the §9 targets. From M2.5 on our own segmentation makes the charts and xatlas only packs them, which takes under a second here.
   - It ignores winding, so about half its charts come out mirrored. The metrics report this as `mirrored_islands`, separately from flips.
   - It can leave small self-overlaps inside a chart around one vertex without flipping any triangle. The raster check catches them.
+  - With a resolution set it grows the atlas to fit rather than filling a square, and the result isn't always square. We normalize by the longer side to keep island shapes, so a 2:1 atlas uses only half the sheet: dead_tree_trunk packs at 25%. Our own packing step (M2.9) has to fill the square.
   - **Corpus result (113 meshes, 1024 px):** 0 flips; 6 meshes with overlaps of 1–43 texels (boulder_01, coast_rocks_01, dead_tree_trunk, both crate lids, potted_plant_04_dirt). Against the artists' own UVs, median angle distortion is 1.033 vs 1.019, seams are about 1.7× longer (17.1 vs 10.4), islands 64 vs 24, and packing 51% vs 6% (the input figure is low because the modular kits share one atlas across many meshes). So the stock baseline doesn't meet the zero-overlap rule; our strategies have to.
 - **Harness:** `littlemesh bench` runs the corpus and writes `<name>_uv.csv` next to the LOD CSV, one row per mesh. With `--uv` it measures Auto UVs; without it, the input file's own UVs, which makes a useful second reference. Columns:
   - distortion (angle, area, L2)
@@ -288,6 +289,16 @@ For each triangle, take the Jacobian `J` of the map from the 3D triangle (in its
 | UV layout PNG (`--debug-uv`) | Islands filled by class colour, seams drawn, flips in red, overlaps in magenta |
 | Class map glTF (`--debug-classes`) | The mesh with vertex colours by detected class |
 | Checker glTF (`--debug-checker`) | The export with an embedded checker texture, for checking stretch and density |
+
+How they work (M2.4):
+
+- All three are built from each mesh as it leaves the UV stage (after cleanup, before LODs), so they show LOD0. Without `--uv` they show the file's own UVs, with class `input`.
+- They are written next to the output: `<stem>.uv.png`, `<stem>.classes.glb`, and `<stem>.checker.glb`; the glTFs take the output's extension. With several meshes the PNG name gains the mesh name, and with several materials it gains `m<index>`, because each material is its own 0–1 sheet.
+- **Layout PNG:** drawn at the UV resolution (capped at 4096 px), with V = 0 at the top as glTF textures are. Islands are filled by class colour, each island shaded lighter or darker so neighbours stay apart. Island borders are light lines and the grid is in eighths. Flipped and zero-area triangles are filled and outlined in red, and texels covered twice are magenta. When there are 64 or fewer overlapping texels, each also gets a magenta ring, since a single texel is invisible at full size. Flips and overlaps use the same rules as the metrics (§7.8).
+- **Class map:** the same per-island class colours as vertex colours under one plain material. Vertices shared by two islands are split. Until the strategies land, every triangle is `xatlas` or `input`, so for now this is an island map.
+- **Checker:** 8×8 cells that get redder towards +U and greener towards +V, so mirrored or rotated islands show. A fine grid of 64 lines makes stretch and density differences visible.
+
+Class colours: input grey, xatlas slate blue, repeated light grey, planar blue, box orange, quad grid green, cylinder teal, cone purple, bent tube dark teal, disk yellow, developable brown, organic tan. Red and magenta are kept for errors.
 
 Claude can view the PNGs directly and screenshot the checker glTF in Blender through the Blender MCP connection. Your eyes on the results stay the final check, especially for seam placement.
 

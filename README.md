@@ -88,7 +88,7 @@ cargo run --release -p lm-cli -- process path/to/model.obj -o out/model.glb --lo
 
 `--lods` on its own builds 50%, 25%, and 12.5% levels. You can also give your own targets, such as `--lods 30%,10%` or `--lods 5000,1000`.
 
-`--uv` replaces UV0 with automatic UVs packed for a 1024 px texture (change it with `--uv-resolution 2048`). For now this is the xatlas baseline; the shape-aware unwrapper builds on it.
+`--uv` replaces UV0 with automatic UVs packed for a 1024 px texture (change it with `--uv-resolution 2048`). For now this is the xatlas baseline; the shape-aware unwrapper builds on it. `--debug-uv`, `--debug-classes` and `--debug-checker` also write a UV layout PNG, a class-coloured glTF and a checker-textured glTF next to the output, so you can review the UVs (with or without `--uv`).
 
 To fetch the sample corpus (CC0 meshes from Poly Haven, about 80 MB) for testing, run this with [Node.js](https://nodejs.org):
 

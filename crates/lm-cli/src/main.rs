@@ -9,6 +9,7 @@ use clap::{Parser, Subcommand};
 use lm_core::lod::{LodSettings, LodTarget, SimplifyMethod};
 use lm_core::pipeline::{self, ProcessOptions, ProcessReport};
 use lm_core::stats::{SceneStats, scene_stats};
+use lm_core::uv::debug::{self, DebugMesh};
 use lm_core::uv::{UvMetrics, UvSettings, uv_metrics};
 
 #[derive(Parser)]
@@ -45,6 +46,15 @@ enum Command {
         /// Texture resolution the UVs are packed for; sets island padding.
         #[arg(long, value_name = "PX", default_value_t = 1024)]
         uv_resolution: u32,
+        /// Also write a UV layout PNG per mesh and material, `<output>.uv.*.png`.
+        #[arg(long)]
+        debug_uv: bool,
+        /// Also write the meshes coloured by UV class, `<output>.classes.glb`.
+        #[arg(long)]
+        debug_classes: bool,
+        /// Also write the meshes with a checker texture, `<output>.checker.glb`.
+        #[arg(long)]
+        debug_checker: bool,
         /// Skip welding, degenerate removal, and unused-data removal.
         #[arg(long)]
         no_cleanup: bool,
@@ -97,6 +107,9 @@ fn run(cli: Cli) -> Result<()> {
             lods,
             uv,
             uv_resolution,
+            debug_uv,
+            debug_classes,
+            debug_checker,
             no_cleanup,
             no_optimize,
             report,
@@ -113,9 +126,10 @@ fn run(cli: Cli) -> Result<()> {
                     ..Default::default()
                 }),
                 lods: lods.as_deref().map(parse_lods).transpose()?,
+                debug: debug_uv || debug_classes || debug_checker,
             };
             let import = load(&input)?;
-            let (scene, process_report) = pipeline::process(import.scene, &options);
+            let (scene, mut process_report) = pipeline::process(import.scene, &options);
             lm_core::io::save(&scene, &output)
                 .with_context(|| format!("writing {}", output.display()))?;
             print_process_report(&process_report);
@@ -130,10 +144,90 @@ fn run(cli: Cli) -> Result<()> {
                 stats.meshes.len(),
                 stats.total_triangles
             );
+            let debug_meshes: Vec<DebugMesh> = process_report
+                .meshes
+                .iter_mut()
+                .filter_map(|m| m.debug.take())
+                .collect();
+            let mut written = Vec::new();
+            if debug_uv {
+                written.extend(write_layouts(
+                    &output,
+                    &debug_meshes,
+                    uv_resolution.min(4096),
+                )?);
+            }
+            for (wanted, kind, scene) in [
+                (
+                    debug_classes,
+                    "classes",
+                    debug::class_scene as fn(&[DebugMesh]) -> _,
+                ),
+                (debug_checker, "checker", debug::checker_scene),
+            ] {
+                if wanted {
+                    let path = sibling(&output, &[kind], &extension(&output));
+                    lm_core::io::save(&scene(&debug_meshes), &path)
+                        .with_context(|| format!("writing {}", path.display()))?;
+                    written.push(path);
+                }
+            }
+            for path in written {
+                println!("wrote {}", path.display());
+            }
         }
         Command::Bench { dir, output, uv } => bench(&dir, &output, uv)?,
     }
     Ok(())
+}
+
+/// `out/rock.glb` + ["uv", "Body"] + "png" → `out/rock.uv.Body.png`.
+fn sibling(output: &Path, parts: &[&str], extension: &str) -> PathBuf {
+    let stem = output.file_stem().unwrap_or_default().to_string_lossy();
+    let parts: Vec<String> = parts
+        .iter()
+        .map(|p| {
+            p.chars()
+                .map(|c| {
+                    if c.is_alphanumeric() || c == '-' {
+                        c
+                    } else {
+                        '_'
+                    }
+                })
+                .collect()
+        })
+        .collect();
+    output.with_file_name(format!("{stem}.{}.{extension}", parts.join(".")))
+}
+
+fn extension(path: &Path) -> String {
+    path.extension()
+        .map_or("glb".into(), |e| e.to_string_lossy().to_ascii_lowercase())
+}
+
+/// Writes one layout PNG per mesh and sheet. The mesh name is left out for a
+/// single mesh, and the material for a single sheet.
+fn write_layouts(output: &Path, meshes: &[DebugMesh], size: u32) -> Result<Vec<PathBuf>> {
+    let mut written = Vec::new();
+    for d in meshes {
+        let images = debug::layout_pngs(d, size);
+        for image in &images {
+            let mut parts = vec!["uv".to_string()];
+            if meshes.len() > 1 {
+                parts.push(d.mesh.name.clone());
+            }
+            if images.len() > 1 {
+                parts.push(image.material.map_or("default".into(), |m| format!("m{m}")));
+            }
+            let parts: Vec<&str> = parts.iter().map(String::as_str).collect();
+            let path = sibling(output, &parts, "png");
+            std::fs::write(&path, &image.png)
+                .with_context(|| format!("writing {}", path.display()))?;
+            written.push(path);
+        }
+    }
+    Ok(written)
 }
 
 /// Parses "50%,25%,5000" into LOD targets.

@@ -172,6 +172,42 @@ fn process_with_uv_reports_clean_uvs() {
 }
 
 #[test]
+fn debug_outputs_are_written_next_to_the_output() {
+    let dir = tempfile::tempdir().unwrap();
+    let obj = dir.path().join("wavy.obj");
+    let gltf = dir.path().join("wavy.gltf");
+    std::fs::write(&obj, wavy_grid_obj(10)).unwrap();
+
+    let out = littlemesh(&[
+        "process",
+        obj.to_str().unwrap(),
+        "-o",
+        gltf.to_str().unwrap(),
+        "--uv",
+        "--lods",
+        "--debug-uv",
+        "--debug-classes",
+        "--debug-checker",
+    ]);
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let png = std::fs::read(dir.path().join("wavy.uv.png")).unwrap();
+    assert!(png.starts_with(b"\x89PNG"));
+    // Debug scenes keep the output's format and hold LOD0 only.
+    for name in ["wavy.classes.gltf", "wavy.checker.gltf"] {
+        let path = dir.path().join(name);
+        let out = littlemesh(&["stats", path.to_str().unwrap(), "--json"]);
+        assert!(out.status.success(), "{name}");
+        let stats: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+        assert_eq!(stats["meshes"].as_array().unwrap().len(), 1, "{name}");
+        assert_eq!(stats["meshes"][0]["triangles"], 200, "{name}");
+    }
+}
+
+#[test]
 fn bad_uv_resolution_is_rejected() {
     let out = littlemesh(&["process", "in.obj", "-o", "out.glb", "--uv-resolution", "8"]);
     assert!(!out.status.success());

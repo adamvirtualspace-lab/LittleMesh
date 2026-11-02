@@ -5,6 +5,7 @@ use serde::Serialize;
 
 use crate::lod::{self, LodSettings, SimplifyMethod};
 use crate::optimize::{self, CleanupReport, Warning, WarningKind};
+use crate::uv::debug::DebugMesh;
 use crate::uv::{self, UvReport, UvSettings};
 use crate::{Mesh, Scene};
 
@@ -16,6 +17,8 @@ pub struct ProcessOptions {
     pub uvs: Option<UvSettings>,
     /// Generate a LOD chain; `None` exports LOD0 only.
     pub lods: Option<LodSettings>,
+    /// Keep a copy of each mesh as it left the UV stage, for debug outputs.
+    pub debug: bool,
 }
 
 impl Default for ProcessOptions {
@@ -25,6 +28,7 @@ impl Default for ProcessOptions {
             optimize: true,
             uvs: None,
             lods: None,
+            debug: false,
         }
     }
 }
@@ -45,6 +49,9 @@ pub struct MeshReport {
     pub uv: Option<UvReport>,
     /// LOD0 first; a single entry when LODs are off.
     pub lods: Vec<LodReport>,
+    /// The mesh after cleanup and Auto UVs, when [`ProcessOptions::debug`] is set.
+    #[serde(skip)]
+    pub debug: Option<DebugMesh>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -92,6 +99,15 @@ pub fn process(mut scene: Scene, options: &ProcessOptions) -> (Scene, ProcessRep
             }
         }
         mesh_report.warnings = optimize::mesh_warnings(&mesh);
+        if options.debug {
+            mesh_report.debug = Some(match &mut mesh_report.uv {
+                Some(r) => DebugMesh {
+                    mesh: mesh.clone(),
+                    classes: std::mem::take(&mut r.classes),
+                },
+                None => DebugMesh::input(mesh.clone()),
+            });
+        }
         if let Some(reason) = uv_failure {
             mesh_report.warnings.push(Warning {
                 mesh: mesh.name.clone(),
@@ -146,6 +162,7 @@ fn mesh_report(mesh: &Mesh, cleanup: Option<CleanupReport>) -> MeshReport {
         cleanup,
         warnings: Vec::new(),
         uv: None,
+        debug: None,
         lods: Vec::new(),
     }
 }
@@ -154,6 +171,7 @@ fn mesh_report(mesh: &Mesh, cleanup: Option<CleanupReport>) -> MeshReport {
 mod tests {
     use super::*;
     use crate::primitives;
+    use crate::uv::UvClass;
 
     #[test]
     fn lods_become_suffixed_sibling_meshes() {
@@ -212,5 +230,34 @@ mod tests {
         // Every LOD inherits UV0.
         assert!(out.meshes.iter().all(|m| m.uvs.len() == 1));
         out.validate().unwrap();
+        assert!(report.meshes[0].debug.is_none());
+    }
+
+    #[test]
+    fn debug_keeps_the_mesh_after_the_uv_stage() {
+        let scene = Scene {
+            meshes: vec![primitives::torus(1.0, 0.3, 24, 12)],
+            ..Default::default()
+        };
+        let options = ProcessOptions {
+            debug: true,
+            ..Default::default()
+        };
+        let (_, report) = process(scene.clone(), &options);
+        let debug = report.meshes[0].debug.as_ref().unwrap();
+        assert!(debug.classes.iter().all(|&c| c == UvClass::Input));
+
+        let options = ProcessOptions {
+            uvs: Some(UvSettings::default()),
+            ..options
+        };
+        let (_, report) = process(scene, &options);
+        let debug = report.meshes[0].debug.as_ref().unwrap();
+        assert_eq!(debug.classes.len(), debug.mesh.triangle_count());
+        assert!(debug.classes.iter().all(|&c| c == UvClass::Xatlas));
+        assert_eq!(
+            debug.mesh.uvs[0].len(),
+            report.meshes[0].uv.as_ref().unwrap().vertices_after
+        );
     }
 }

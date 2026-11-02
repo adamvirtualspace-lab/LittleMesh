@@ -4,6 +4,7 @@
 //! generation and packer, one 0–1 sheet per material. The shape-aware
 //! strategies arrive on top of it and are measured against it.
 
+pub mod debug;
 pub mod metrics;
 
 use std::time::Instant;
@@ -40,6 +41,26 @@ impl UvSettings {
     }
 }
 
+/// What kind of part a triangle was unwrapped as (§7.5). The shape classes
+/// arrive with segmentation and the strategies; until then every triangle is
+/// `Xatlas` after Auto UVs, or `Input` when the UVs came with the file.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum UvClass {
+    Input,
+    Xatlas,
+    Repeated,
+    Planar,
+    Box,
+    QuadGrid,
+    Cylinder,
+    Cone,
+    BentTube,
+    Disk,
+    Developable,
+    Organic,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum UvMethod {
@@ -55,6 +76,9 @@ pub struct UvReport {
     pub vertices_after: usize,
     pub elapsed_ms: f64,
     pub metrics: UvMetrics,
+    /// Class of each triangle, in the mesh's order right after unwrapping.
+    #[serde(skip)]
+    pub classes: Vec<UvClass>,
 }
 
 /// Replaces UV0 with a fresh unwrap. Other UV channels are kept; tangents
@@ -73,6 +97,7 @@ pub fn auto_uv(mesh: &mut Mesh, settings: &UvSettings) -> Result<UvReport> {
         vertices_after: mesh.vertex_count(),
         elapsed_ms,
         metrics,
+        classes: vec![UvClass::Xatlas; mesh.triangle_count()],
     })
 }
 
@@ -183,19 +208,12 @@ fn xatlas_baseline(mesh: &mut Mesh, settings: &UvSettings) -> Result<usize> {
         }
     }
 
-    fn gather<T: Copy>(data: &[T], sources: &[u32]) -> Vec<T> {
-        sources.iter().map(|&i| data[i as usize]).collect()
-    }
-    mesh.positions = gather(&mesh.positions, &sources);
-    mesh.normals = mesh.normals.as_deref().map(|n| gather(n, &sources));
     mesh.tangents = None;
-    mesh.colors = mesh.colors.as_deref().map(|c| gather(c, &sources));
-    let mut uvs: Vec<Vec<Vec2>> = mesh.uvs.iter().map(|c| gather(c, &sources)).collect();
-    match uvs.first_mut() {
+    mesh.gather_vertices(&sources);
+    match mesh.uvs.first_mut() {
         Some(uv0) => *uv0 = new_uvs,
-        None => uvs.push(new_uvs),
+        None => mesh.uvs.push(new_uvs),
     }
-    mesh.uvs = uvs;
     mesh.indices = indices;
     Ok(charts)
 }

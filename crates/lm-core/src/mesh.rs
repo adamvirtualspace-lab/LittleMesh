@@ -117,6 +117,21 @@ impl Mesh {
         self.indices.len() / 3
     }
 
+    /// Rebuilds every vertex attribute so new vertex `i` copies old vertex
+    /// `sources[i]`. Indices are left for the caller to rewrite.
+    pub(crate) fn gather_vertices(&mut self, sources: &[u32]) {
+        fn gather<T: Copy>(data: &[T], sources: &[u32]) -> Vec<T> {
+            sources.iter().map(|&i| data[i as usize]).collect()
+        }
+        self.positions = gather(&self.positions, sources);
+        self.normals = self.normals.as_deref().map(|n| gather(n, sources));
+        self.tangents = self.tangents.as_deref().map(|t| gather(t, sources));
+        self.colors = self.colors.as_deref().map(|c| gather(c, sources));
+        for uvs in &mut self.uvs {
+            *uvs = gather(uvs, sources);
+        }
+    }
+
     /// Axis-aligned bounds as `(min, max)`, or `None` for an empty mesh.
     pub fn bounds(&self) -> Option<(Vec3, Vec3)> {
         let first = *self.positions.first()?;
