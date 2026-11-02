@@ -228,6 +228,7 @@ pub enum WarningKind {
     MissingNormals,
     TinyScale,
     HugeScale,
+    AutoUvFailed,
 }
 
 /// Checks one mesh for problems worth reporting (docs/algorithms.md §3).

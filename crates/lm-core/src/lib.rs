@@ -8,6 +8,7 @@ pub mod optimize;
 pub mod pipeline;
 pub mod primitives;
 pub mod stats;
+pub mod uv;
 
 pub use halfedge::HalfEdgeMesh;
 pub use mesh::{AlphaMode, Image, Material, Mesh, Scene, Submesh, TextureRef};

@@ -130,3 +130,50 @@ fn bad_lod_spec_is_rejected() {
     assert!(!out.status.success());
     assert!(String::from_utf8_lossy(&out.stderr).contains("between 0 and 100"));
 }
+
+#[test]
+fn process_with_uv_reports_clean_uvs() {
+    let dir = tempfile::tempdir().unwrap();
+    let obj = dir.path().join("wavy.obj");
+    let glb = dir.path().join("wavy.glb");
+    let report = dir.path().join("report.json");
+    std::fs::write(&obj, wavy_grid_obj(20)).unwrap();
+
+    let out = littlemesh(&[
+        "process",
+        obj.to_str().unwrap(),
+        "-o",
+        glb.to_str().unwrap(),
+        "--uv",
+        "--uv-resolution",
+        "512",
+        "--report",
+        report.to_str().unwrap(),
+    ]);
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(String::from_utf8_lossy(&out.stdout).contains("UVs:"));
+
+    let report: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(&report).unwrap()).unwrap();
+    let uv = &report["meshes"][0]["uv"];
+    assert_eq!(uv["method"], "xatlas");
+    assert_eq!(uv["metrics"]["flipped_triangles"], 0);
+    assert_eq!(uv["metrics"]["overlap_texels"], 0);
+    assert_eq!(uv["metrics"]["raster_resolution"], 512);
+
+    let out = littlemesh(&["stats", glb.to_str().unwrap(), "--json"]);
+    let stats: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(stats["meshes"][0]["uv_channels"], 1);
+    assert_eq!(stats["meshes"][0]["triangles"], 800);
+}
+
+#[test]
+fn bad_uv_resolution_is_rejected() {
+    let out = littlemesh(&["process", "in.obj", "-o", "out.glb", "--uv-resolution", "8"]);
+    assert!(!out.status.success());
+    assert!(String::from_utf8_lossy(&out.stderr).contains("between 64 and 16384"));
+}

@@ -68,7 +68,7 @@ The goal is to get Auto UVs working end-to-end early, with the xatlas baseline f
 
 | ID | Task | Done when | Size |
 | --- | --- | --- | --- |
-| M2.1 | xatlas: compile the upstream sources with `cc`, thin C API, `bindgen`. Verify its packer keeps our own charts intact. | Builds in CI, and a test packs hand-made charts without reshaping them | M |
+| M2.1 | xatlas: compile the vendored upstream sources with `cc` behind a thin C shim, declared by hand in Rust (no `bindgen`, so no libclang). Verify its packer keeps our own charts intact. | Builds in CI, and a test packs hand-made charts without reshaping them | M |
 | M2.2 | **Baseline Auto UVs** with xatlas's default unwrap and pack, and padding from the resolution | `process --uv` produces UVs with no flips or overlaps on the whole corpus | S |
 | M2.3 | UV metrics and validation: angle, area, and L2 distortion, flips, overlaps, seam length, straight-edge ratio, packing efficiency ([algorithms §7.1, §7.8](algorithms.md#71-what-good-means-measurable)), added to `bench` | Metric unit tests on known maps (identity, 2× stretch, a flipped triangle) | M |
 | M2.4 | Debug outputs: UV layout PNG, class-map glTF, checker glTF ([algorithms §8](algorithms.md#8-debug-outputs-and-verification)) | All three generate for a corpus mesh and look right | S |

@@ -9,6 +9,7 @@ use clap::{Parser, Subcommand};
 use lm_core::lod::{LodSettings, LodTarget, SimplifyMethod};
 use lm_core::pipeline::{self, ProcessOptions, ProcessReport};
 use lm_core::stats::{SceneStats, scene_stats};
+use lm_core::uv::{UvMetrics, UvSettings, uv_metrics};
 
 #[derive(Parser)]
 #[command(name = "littlemesh", version, about = "Big meshes, little worries.")]
@@ -38,6 +39,12 @@ enum Command {
         /// of LOD0 ("30%") or triangle counts ("5000").
         #[arg(long, value_name = "TARGETS", num_args = 0..=1, default_missing_value = DEFAULT_LODS)]
         lods: Option<String>,
+        /// Replace UV0 with automatic UVs (xatlas baseline for now).
+        #[arg(long)]
+        uv: bool,
+        /// Texture resolution the UVs are packed for; sets island padding.
+        #[arg(long, value_name = "PX", default_value_t = 1024)]
+        uv_resolution: u32,
         /// Skip welding, degenerate removal, and unused-data removal.
         #[arg(long)]
         no_cleanup: bool,
@@ -52,9 +59,12 @@ enum Command {
     Bench {
         /// Folder searched recursively for .gltf, .glb, and .obj files.
         dir: PathBuf,
-        /// CSV output file.
+        /// CSV output file. UV metrics go next to it as `<name>_uv.csv`.
         #[arg(short, long, default_value = "bench.csv")]
         output: PathBuf,
+        /// Run Auto UVs and measure them. Without it, the input UVs are measured.
+        #[arg(long)]
+        uv: bool,
     },
 }
 
@@ -85,13 +95,23 @@ fn run(cli: Cli) -> Result<()> {
             input,
             output,
             lods,
+            uv,
+            uv_resolution,
             no_cleanup,
             no_optimize,
             report,
         } => {
+            anyhow::ensure!(
+                (64..=16384).contains(&uv_resolution),
+                "--uv-resolution must be between 64 and 16384"
+            );
             let options = ProcessOptions {
                 cleanup: !no_cleanup,
                 optimize: !no_optimize,
+                uvs: uv.then(|| UvSettings {
+                    resolution: uv_resolution,
+                    ..Default::default()
+                }),
                 lods: lods.as_deref().map(parse_lods).transpose()?,
             };
             let import = load(&input)?;
@@ -111,7 +131,7 @@ fn run(cli: Cli) -> Result<()> {
                 stats.total_triangles
             );
         }
-        Command::Bench { dir, output } => bench(&dir, &output)?,
+        Command::Bench { dir, output, uv } => bench(&dir, &output, uv)?,
     }
     Ok(())
 }
@@ -161,6 +181,18 @@ fn print_process_report(report: &ProcessReport) {
         for w in &mesh.warnings {
             println!("  warning: {}", w.message);
         }
+        if let Some(uv) = &mesh.uv {
+            let m = &uv.metrics;
+            println!(
+                "  UVs: {} islands, {} flips, {} overlapping texels, angle distortion {:.3}, packing {:.0}% ({:.0} ms)",
+                m.islands,
+                m.flipped_triangles + m.zero_area_triangles,
+                m.overlap_texels,
+                m.angle_distortion_mean,
+                m.packing_efficiency * 100.0,
+                uv.elapsed_ms
+            );
+        }
         for lod in &mesh.lods {
             let mut line = format!(
                 "  LOD{} {:>9} tris  ACMR {:.2} → {:.2}",
@@ -204,7 +236,39 @@ fn find_models(dir: &Path, out: &mut Vec<PathBuf>) -> Result<()> {
     Ok(())
 }
 
-fn bench(dir: &Path, output: &Path) -> Result<()> {
+const UV_CSV_HEADER: &str = "file,mesh,method,triangles,sheets,islands,flips,zero_area,mirrored_islands,overlap_texels,out_of_bounds,angle_mean,angle_p95,area_mean,l2_stretch,seam_length,straight_ratio,density_mean,density_max,packing,uv_ms\n";
+
+fn uv_csv_row(
+    file: &str,
+    mesh: &str,
+    method: &str,
+    triangles: usize,
+    m: &UvMetrics,
+    ms: f64,
+) -> String {
+    format!(
+        "{file},{},{method},{triangles},{},{},{},{},{},{},{},{:.4},{:.4},{:.4},{:.4},{:.4},{:.4},{:.4},{:.4},{:.4},{ms:.1}\n",
+        mesh.replace(',', " "),
+        m.sheets,
+        m.islands,
+        m.flipped_triangles,
+        m.zero_area_triangles,
+        m.mirrored_islands,
+        m.overlap_texels,
+        m.out_of_bounds_triangles,
+        m.angle_distortion_mean,
+        m.angle_distortion_p95,
+        m.area_distortion_mean,
+        m.l2_stretch,
+        m.seam_length,
+        m.straight_edge_ratio,
+        m.density_deviation_mean,
+        m.density_deviation_max,
+        m.packing_efficiency,
+    )
+}
+
+fn bench(dir: &Path, output: &Path, uv: bool) -> Result<()> {
     let mut files = Vec::new();
     find_models(dir, &mut files)?;
     anyhow::ensure!(
@@ -214,9 +278,13 @@ fn bench(dir: &Path, output: &Path) -> Result<()> {
     );
 
     let options = ProcessOptions {
+        uvs: uv.then(UvSettings::default),
         lods: Some(LodSettings::default()),
         ..Default::default()
     };
+    let resolution = UvSettings::default().resolution;
+    let mut uv_csv = String::from(UV_CSV_HEADER);
+    let (mut uv_meshes, mut uv_failed) = (0, 0);
     let mut csv = String::from(
         "file,mesh,level,triangles,target_triangles,vertices,error,screen_size,method,acmr_before,acmr_after,file_ms\n",
     );
@@ -238,6 +306,14 @@ fn bench(dir: &Path, output: &Path) -> Result<()> {
                 continue;
             }
         };
+        if !uv {
+            for mesh in &scene.meshes {
+                if let Some(m) = uv_metrics(mesh, 0, resolution) {
+                    uv_csv +=
+                        &uv_csv_row(&name, &mesh.name, "input", mesh.triangle_count(), &m, 0.0);
+                }
+            }
+        }
         let (_, report) = pipeline::process(scene, &options);
         let ms = start.elapsed().as_secs_f64() * 1000.0;
         let (mut permissive, mut sloppy) = (0, 0);
@@ -264,6 +340,16 @@ fn bench(dir: &Path, output: &Path) -> Result<()> {
                 );
             }
         }
+        for mesh in &report.meshes {
+            if let Some(r) = &mesh.uv {
+                let m = &r.metrics;
+                uv_meshes += 1;
+                uv_failed +=
+                    usize::from(m.flipped_triangles + m.zero_area_triangles + m.overlap_texels > 0);
+                let triangles = mesh.lods.first().map_or(0, |l| l.triangles);
+                uv_csv += &uv_csv_row(&name, &mesh.name, "xatlas", triangles, m, r.elapsed_ms);
+            }
+        }
         let mut note = String::new();
         if permissive > 0 {
             note += &format!(", {permissive} with seams relaxed");
@@ -274,16 +360,26 @@ fn bench(dir: &Path, output: &Path) -> Result<()> {
         println!("ok      {name} ({ms:.0} ms{note})");
     }
     std::fs::write(output, csv).with_context(|| format!("writing {}", output.display()))?;
+    let uv_output = output.with_file_name(format!(
+        "{}_uv.csv",
+        output.file_stem().unwrap_or_default().to_string_lossy()
+    ));
+    std::fs::write(&uv_output, uv_csv)
+        .with_context(|| format!("writing {}", uv_output.display()))?;
+    if uv {
+        println!("Auto UVs: {uv_failed} of {uv_meshes} meshes have flips or overlaps");
+    }
     if off_target > 0 {
         println!(
             "{off_target} LOD levels missed their triangle target by more than 5% (usually tiny parts)"
         );
     }
     println!(
-        "\n{} of {} files processed, results in {}",
+        "\n{} of {} files processed, results in {} and {}",
         files.len() - failures,
         files.len(),
-        output.display()
+        output.display(),
+        uv_output.display()
     );
     anyhow::ensure!(failures == 0, "{failures} files failed");
     Ok(())

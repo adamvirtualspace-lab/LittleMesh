@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/lm-core", "crates/lm-cli"]
+members = ["crates/lm-core", "crates/lm-cli", "crates/lm-xatlas"]
 resolver = "3"
 
 [workspace.package]

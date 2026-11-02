@@ -238,7 +238,9 @@ For each triangle, take the Jacobian `J` of the map from the 3D triangle (in its
 - **Angle distortion:** `σ₁ / σ₂`, where 1 is perfectly conformal.
 - **Area distortion:** `log₂(σ₁σ₂ / s)`, where `s` is the global UV-to-3D area ratio and 0 is perfect.
 - **L2 stretch** (Sander et al. 2001): `sqrt((σ₁² + σ₂²) / 2)`, area-weighted RMS.
-- **Flip:** `det J < 0`.
+- **Flip:** `det J` with the opposite sign to the triangle's island, whose orientation is the area-weighted majority. A wholly mirrored island isn't a flip; it's counted as `mirrored_islands`. Winding is measured with V pointing down, as glTF stores it. Triangles with 3D area but no UV area count alongside flips.
+- **Overlap:** texels at resolution R whose centre is strictly inside two or more triangles of the same sheet. A shared edge is evaluated with identical arithmetic from both sides, so neighbours never register.
+- Implemented in `lm-core/src/uv/metrics.rs`, per sheet (one material's 0–1 space) and combined weighted by 3D area.
 
 ### 7.9 Island post-processing
 
@@ -250,7 +252,8 @@ For each triangle, take the Jacobian `J` of the map from the 3D triangle (in its
 
 - Padding `p = R / 256` px by default (4 px at 1024, 8 at 2048, 16 at 4096), which keeps mips clean down to 256 px. Adjustable as `island_gap`.
 - Pack **per material** into its own 0–1 space by default. `single_sheet` packs everything together.
-- v0.1 uses **xatlas's packer** on our own charts. First verify (M2.1) that its UV-mesh input path keeps the chart layouts intact. Rotation is limited to 90° steps for straightened islands, and free for organic ones.
+- v0.1 uses **xatlas's packer** on our own charts, through its UV-mesh input path. Rotation is limited to 90° steps for straightened islands, and free for organic ones.
+- **Verified in M2.1:** each island keeps one uniform scale shared by all islands, and is only moved and rotated, *with one exception*. Stock xatlas stretches every chart separately along x and y so its extents land on whole texels: under 0.5% on big charts, up to about 33% on charts a few texels wide. Our vendored copy adds a `keepChartAspect` pack option that skips that stretch (`crates/lm-xatlas/vendor/xatlas/PATCHES.md`), and our own charts are packed with it on. Its `rotateChartsToAxis` rotates freely to the convex-hull axis, so straightened islands turn it off and keep only the 90° `rotateCharts`.
 - **Later:** our own packer (a rectangle packer for straight islands plus raster bottom-left for the rest) and UDIM tiles.
 
 ### 7.11 Lightmap UVs (UV1)
@@ -261,7 +264,13 @@ For each triangle, take the Jacobian `J` of the map from the 3D triangle (in its
 ### 7.12 Baseline and tuning
 
 - **Baseline:** xatlas's default unwrap. It ships first (M2.2), so Auto UVs works from early on, and every strategy has to beat it.
-- **Harness:** `littlemesh bench` runs the corpus and writes a CSV per mesh. Columns:
+- **Baseline notes from M2.2:**
+  - xatlas drops every triangle with an absolute area under `FLT_EPSILON` (about 1.2·10⁻⁷) as degenerate, which on a 20 cm prop is every fine triangle. Each sheet is scaled to a total area of 10⁴ before it goes in; a uniform scale changes no UV shapes.
+  - Its chart growing (the boundary-intersection checks) runs single-threaded per connected part and scales worse than linearly: about 5 s at 22k triangles, 21 s at 66k, 43 s at 100k, and 16.5 minutes on the 680k-triangle scan. That's fine for a yardstick but far off the §9 targets. From M2.5 on our own segmentation makes the charts and xatlas only packs them, which takes under a second here.
+  - It ignores winding, so about half its charts come out mirrored. The metrics report this as `mirrored_islands`, separately from flips.
+  - It can leave small self-overlaps inside a chart around one vertex without flipping any triangle. The raster check catches them.
+  - **Corpus result (113 meshes, 1024 px):** 0 flips; 6 meshes with overlaps of 1–43 texels (boulder_01, coast_rocks_01, dead_tree_trunk, both crate lids, potted_plant_04_dirt). Against the artists' own UVs, median angle distortion is 1.033 vs 1.019, seams are about 1.7× longer (17.1 vs 10.4), islands 64 vs 24, and packing 51% vs 6% (the input figure is low because the modular kits share one atlas across many meshes). So the stock baseline doesn't meet the zero-overlap rule; our strategies have to.
+- **Harness:** `littlemesh bench` runs the corpus and writes `<name>_uv.csv` next to the LOD CSV, one row per mesh. With `--uv` it measures Auto UVs; without it, the input file's own UVs, which makes a useful second reference. Columns:
   - distortion (angle, area, L2)
   - flips and overlaps
   - visibility-weighted seam length
