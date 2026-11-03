@@ -1,10 +1,13 @@
 // The app shell: one obvious path (drop a mesh, Process, Export), with
 // options tucked away and results shown as soon as they exist.
 
+import "@fontsource-variable/geist";
+
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { open, save } from "@tauri-apps/plugin-dialog";
 
+import { initThemePicker, onThemeChange } from "./theme";
 import { decode } from "./transfer";
 import { Viewer } from "./viewer";
 
@@ -70,6 +73,8 @@ const fmt = (n: number) => n.toLocaleString("en-US");
 const STALE = "stale";
 
 const viewer = new Viewer($("canvas-host"));
+onThemeChange((dark) => viewer.setDark(dark));
+initThemePicker($("btn-theme"), $("theme-popover"));
 
 const state = {
   generation: 0,

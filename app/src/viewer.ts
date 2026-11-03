@@ -6,8 +6,13 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 
 import { FLOATS_PER_VERTEX, type DecodedMesh } from "./transfer";
 
-const BACKGROUND = 0x1d2027;
-const SURFACE = 0xb9bec9;
+const SURFACE = 0xbcbcbc;
+
+/** Viewport colours per mode, matching --viewport in style.css. */
+const PALETTES = {
+  light: { background: 0xefefef, gridCenter: 0xb5b5b5, grid: 0xdcdcdc },
+  dark: { background: 0x171717, gridCenter: 0x484848, grid: 0x2a2a2a },
+};
 
 export class Viewer {
   private renderer: THREE.WebGLRenderer;
@@ -16,6 +21,7 @@ export class Viewer {
   private controls: OrbitControls;
   private model = new THREE.Group();
   private grid: THREE.GridHelper | null = null;
+  private palette = PALETTES.dark;
   private surface = new THREE.MeshStandardMaterial({
     color: SURFACE,
     roughness: 0.75,
@@ -38,7 +44,7 @@ export class Viewer {
   constructor(host: HTMLElement) {
     this.renderer = new THREE.WebGLRenderer({ antialias: true });
     this.renderer.setPixelRatio(window.devicePixelRatio);
-    this.renderer.setClearColor(BACKGROUND);
+    this.renderer.setClearColor(this.palette.background);
     host.appendChild(this.renderer.domElement);
 
     this.scene.add(new THREE.HemisphereLight(0xffffff, 0x3a3f4b, 1.6));
@@ -112,13 +118,26 @@ export class Viewer {
     this.controls.target.copy(sphere.center);
     this.controls.update();
 
+    this.setGrid(niceSize(radius * 4), new THREE.Vector3(sphere.center.x, box.min.y, sphere.center.z));
+  }
+
+  setDark(dark: boolean) {
+    this.palette = dark ? PALETTES.dark : PALETTES.light;
+    this.renderer.setClearColor(this.palette.background);
+    if (this.grid) {
+      this.setGrid(this.grid.userData.size, this.grid.position.clone());
+    }
+    this.dirty = true;
+  }
+
+  private setGrid(size: number, position: THREE.Vector3) {
     if (this.grid) {
       this.scene.remove(this.grid);
       this.grid.dispose();
     }
-    const size = niceSize(radius * 4);
-    this.grid = new THREE.GridHelper(size, 20, 0x4a5060, 0x2c303a);
-    this.grid.position.set(sphere.center.x, box.min.y, sphere.center.z);
+    this.grid = new THREE.GridHelper(size, 20, this.palette.gridCenter, this.palette.grid);
+    this.grid.userData.size = size;
+    this.grid.position.copy(position);
     this.scene.add(this.grid);
     this.dirty = true;
   }

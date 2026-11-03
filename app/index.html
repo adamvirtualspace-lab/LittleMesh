@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" class="dark">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -20,7 +20,13 @@
         <div id="view-label" hidden></div>
 
         <div id="empty">
-          <div class="empty-icon" aria-hidden="true"></div>
+          <div class="empty-icon" aria-hidden="true">
+            <svg class="icon" viewBox="0 0 24 24">
+              <path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z" />
+              <path d="m3.3 7 8.7 5 8.7-5" />
+              <path d="M12 22V12" />
+            </svg>
+          </div>
           <h1>Drop a mesh here</h1>
           <p>glTF, GLB, OBJ or FBX</p>
           <button id="btn-open-empty" class="primary" title="Open a file (Ctrl+O)">Open file…</button>
@@ -31,11 +37,44 @@
 
       <aside id="panel">
         <header>
-          <span class="brand">LittleMesh</span>
+          <span class="brand">
+            <span class="brand-mark" aria-hidden="true">
+              <svg class="icon" viewBox="0 0 24 24">
+                <path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z" />
+                <path d="m3.3 7 8.7 5 8.7-5" />
+                <path d="M12 22V12" />
+              </svg>
+            </span>
+            LittleMesh
+          </span>
+          <button id="btn-theme" class="icon-button" title="Theme" aria-haspopup="dialog" aria-expanded="false">
+            <svg class="icon" viewBox="0 0 24 24">
+              <circle cx="12" cy="12" r="9" />
+              <path d="M12 3a9 9 0 0 1 0 18Z" fill="currentColor" />
+            </svg>
+          </button>
           <button id="btn-open" title="Open a file (Ctrl+O)">Open…</button>
         </header>
 
-        <div id="file" hidden>
+        <div id="theme-popover" role="dialog" aria-label="Theme" hidden>
+          <span class="popover-label">Mode</span>
+          <div class="segmented" role="group" aria-label="Mode">
+            <button data-mode="light">Light</button>
+            <button data-mode="dark">Dark</button>
+            <button data-mode="system">System</button>
+          </div>
+          <span class="popover-label">Colour</span>
+          <div class="swatches" role="group" aria-label="Colour">
+            <button data-color="neutral"><span class="dot" data-color="neutral"></span>Neutral</button>
+            <button data-color="blue"><span class="dot" data-color="blue"></span>Blue</button>
+            <button data-color="green"><span class="dot" data-color="green"></span>Green</button>
+            <button data-color="orange"><span class="dot" data-color="orange"></span>Orange</button>
+            <button data-color="rose"><span class="dot" data-color="rose"></span>Rose</button>
+            <button data-color="violet"><span class="dot" data-color="violet"></span>Violet</button>
+          </div>
+        </div>
+
+        <div id="file" class="card" hidden>
           <h2 id="file-name"></h2>
           <p id="file-summary" class="muted"></p>
           <dl id="file-stats"></dl>
@@ -43,7 +82,7 @@
 
         <ul id="warnings" hidden></ul>
 
-        <div id="process" hidden>
+        <div id="process" class="card" hidden>
           <button id="btn-process" class="primary wide" title="Clean up, optimize and make LODs (Ctrl+Enter)">Process</button>
           <p id="process-status" class="muted" hidden></p>
 
@@ -68,7 +107,7 @@
           </details>
         </div>
 
-        <div id="results" hidden>
+        <div id="results" class="card" hidden>
           <div class="segmented" role="group" aria-label="Which mesh to show">
             <button id="btn-view-input" title="The file as loaded">Original</button>
             <button id="btn-view-output" title="The processed result">Result</button>
